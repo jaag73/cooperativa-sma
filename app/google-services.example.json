@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:123456789012:android:abcdef1234567890abcdef",
         "android_client_info": {
-          "package_name": "com.example.cooperativadeliveryapp"
+          "package_name": "mx.cooperativasma.app"
         }
       },
       "oauth_client": [],

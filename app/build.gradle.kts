@@ -7,13 +7,13 @@ plugins {
 }
 
 android {
-    namespace = "com.example.cooperativadeliveryapp"
+    namespace = "mx.cooperativasma.app"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.example.cooperativadeliveryapp"
+        applicationId = "mx.cooperativasma.app"
         minSdk = 24
         targetSdk = 37
         versionCode = 1
