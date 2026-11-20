@@ -107,19 +107,32 @@ fun LoginScreen(
                     .padding(24.dp)
             ) {
                 Text(
-                    text = "Iniciar Sesión",
+                    text = if (uiState.isRegisterMode) "Crear Cuenta" else "Iniciar Sesión",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(24.dp))
 
+                if (uiState.isRegisterMode) {
+                    OutlinedTextField(
+                        value = uiState.name,
+                        onValueChange = { viewModel.onNameChange(it) },
+                        label = { Text("Nombre Completo o de Negocio") },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                        enabled = !uiState.isLoading,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
                 OutlinedTextField(
                     value = uiState.emailOrPhone,
                     onValueChange = { viewModel.onEmailOrPhoneChange(it) },
-                    label = { Text("Correo electrónico o Teléfono") },
+                    label = { Text("Correo electrónico") },
                     modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
                     enabled = !uiState.isLoading,
                     shape = RoundedCornerShape(12.dp)
                 )
@@ -145,6 +158,40 @@ fun LoginScreen(
                     shape = RoundedCornerShape(12.dp)
                 )
 
+                if (!uiState.isRegisterMode) {
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                        TextButton(
+                            onClick = { viewModel.sendPasswordResetEmail() },
+                            enabled = !uiState.isLoading
+                        ) {
+                            Text("¿Olvidaste tu contraseña?", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                } else {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Text("Selecciona tu rol inicial:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        UserRole.entries.forEach { role ->
+                            val isSelected = uiState.selectedRole == role
+                            val label = when (role) {
+                                UserRole.CLIENT -> "Cliente"
+                                UserRole.BUSINESS -> "Negocio"
+                                UserRole.COURIER -> "Repartidor"
+                            }
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { viewModel.onRoleSelect(role) },
+                                label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(24.dp))
 
                 if (uiState.isLoading) {
@@ -153,8 +200,14 @@ fun LoginScreen(
                     }
                 } else {
                     PrimaryActionButton(
-                        text = "Ingresar",
-                        onClick = { viewModel.login() }
+                        text = if (uiState.isRegisterMode) "Crear Cuenta" else "Ingresar",
+                        onClick = {
+                            if (uiState.isRegisterMode) {
+                                viewModel.register()
+                            } else {
+                                viewModel.login()
+                            }
+                        }
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     OutlinedButton(
@@ -176,13 +229,13 @@ fun LoginScreen(
                     }
                     
                     Surface(
-                        color = MaterialTheme.colorScheme.errorContainer,
+                        color = if (rawError.startsWith("Correo de recuperación enviado")) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
                             text = displayError,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            color = if (rawError.startsWith("Correo de recuperación enviado")) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer,
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(12.dp),
                             textAlign = TextAlign.Center
@@ -224,11 +277,79 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
         
-        TextButton(onClick = onNavigateToRegister) {
-            Text("¿Aún no tienes cuenta? Regístrate aquí", color = MaterialTheme.colorScheme.primary)
+        TextButton(
+            onClick = {
+                viewModel.toggleRegisterMode()
+            }
+        ) {
+            Text(
+                text = if (uiState.isRegisterMode) "¿Ya tienes cuenta? Inicia sesión aquí" else "¿Aún no tienes cuenta? Regístrate aquí",
+                color = MaterialTheme.colorScheme.primary
+            )
         }
         
         Spacer(modifier = Modifier.height(16.dp))
+    }
+
+    if (uiState.showGoogleOnboardingDialog) {
+        var googleRole by remember { mutableStateOf(UserRole.CLIENT) }
+
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissGoogleOnboardingDialog() },
+            title = {
+                Text(
+                    text = "¡Bienvenido a Cooperativa SMA!",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Selecciona tu rol inicial para comenzar en la red:",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    UserRole.entries.forEach { role ->
+                        val isSelected = googleRole == role
+                        val label = when (role) {
+                            UserRole.CLIENT -> "🏠 Cliente / Vecino"
+                            UserRole.BUSINESS -> "🏪 Negocio / Comercio"
+                            UserRole.COURIER -> "🛵 Repartidor"
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = { googleRole = role }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = label, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.completeGoogleOnboarding(googleRole)
+                    }
+                ) {
+                    Text("Confirmar y Entrar")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { viewModel.dismissGoogleOnboardingDialog() }
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 }
 

@@ -21,23 +21,44 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import android.content.Context
 import mx.cooperativasma.app.R
 
+import mx.cooperativasma.app.domain.repository.UserRepository
+import com.google.firebase.auth.FirebaseAuth
+import mx.cooperativasma.app.domain.model.AccountStatus
+
 data class LoginUiState(
     val emailOrPhone: String = "",
+    val name: String = "",
+    val selectedRole: UserRole = UserRole.CLIENT,
+    val isRegisterMode: Boolean = false,
     val isPasswordVisible: Boolean = false,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
-    val loginSuccessProfile: UserProfile? = null
+    val loginSuccessProfile: UserProfile? = null,
+    val showGoogleOnboardingDialog: Boolean = false
 )
 
 @HiltViewModel
 class LoginViewModel @Inject constructor(
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val userRepository: UserRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
     private var currentPassword = ""
+
+    fun toggleRegisterMode() {
+        _uiState.update { it.copy(isRegisterMode = !it.isRegisterMode, errorMessage = null) }
+    }
+
+    fun onNameChange(value: String) {
+        _uiState.update { it.copy(name = value, errorMessage = null) }
+    }
+
+    fun onRoleSelect(role: UserRole) {
+        _uiState.update { it.copy(selectedRole = role, errorMessage = null) }
+    }
 
     fun onEmailOrPhoneChange(value: String) {
         _uiState.update { it.copy(emailOrPhone = value, errorMessage = null) }
@@ -61,15 +82,15 @@ class LoginViewModel @Inject constructor(
             UserRole.COURIER -> "repartidor@sma.mx"
         }
         currentPassword = "123456"
-        _uiState.update { it.copy(emailOrPhone = email, errorMessage = null) }
+        _uiState.update { it.copy(emailOrPhone = email, isRegisterMode = false, errorMessage = null) }
     }
 
     fun login() {
-        val emailOrPhone = _uiState.value.emailOrPhone
-        val password = currentPassword
+        val emailOrPhone = _uiState.value.emailOrPhone.trim()
+        val password = currentPassword.trim()
 
         if (emailOrPhone.isBlank() || password.isBlank()) {
-            _uiState.update { it.copy(errorMessage = "Por favor completa ambos campos.") }
+            _uiState.update { it.copy(errorMessage = "Por favor completa todos los campos.") }
             return
         }
 
@@ -81,6 +102,54 @@ class LoginViewModel @Inject constructor(
                 },
                 onFailure = { error ->
                     _uiState.update { it.copy(isLoading = false, errorMessage = error.message) }
+                }
+            )
+        }
+    }
+
+    fun register() {
+        val email = _uiState.value.emailOrPhone.trim()
+        val password = currentPassword.trim()
+        val name = _uiState.value.name.trim()
+        val role = _uiState.value.selectedRole
+
+        if (email.isBlank() || password.isBlank() || name.isBlank()) {
+            _uiState.update { it.copy(errorMessage = "Por favor completa todos los campos para el registro.") }
+            return
+        }
+
+        if (password.length < 6) {
+            _uiState.update { it.copy(errorMessage = "La contraseña debe tener al menos 6 caracteres.") }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            authRepository.registerWithEmail(email, password, name, role).fold(
+                onSuccess = { profile ->
+                    _uiState.update { it.copy(isLoading = false, loginSuccessProfile = profile) }
+                },
+                onFailure = { error ->
+                    _uiState.update { it.copy(isLoading = false, errorMessage = error.message ?: "Error al registrar cuenta.") }
+                }
+            )
+        }
+    }
+
+    fun sendPasswordResetEmail() {
+        val email = _uiState.value.emailOrPhone.trim()
+        if (email.isBlank()) {
+            _uiState.update { it.copy(errorMessage = "Ingresa tu correo en el campo correspondiente para restablecer la contraseña.") }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            authRepository.sendPasswordResetEmail(email).fold(
+                onSuccess = {
+                    _uiState.update { it.copy(isLoading = false, errorMessage = "Correo de recuperación enviado a $email") }
+                },
+                onFailure = { error ->
+                    _uiState.update { it.copy(isLoading = false, errorMessage = error.message ?: "Error al enviar correo de recuperación.") }
                 }
             )
         }
@@ -104,15 +173,15 @@ class LoginViewModel @Inject constructor(
                 val result = credentialManager.getCredential(context, request)
                 val credential = result.credential
                 
-                if (credential is com.google.android.libraries.identity.googleid.GoogleIdTokenCredential) {
+                if (credential is GoogleIdTokenCredential) {
                     val idToken = credential.idToken
                     authRepository.signInWithGoogle(idToken).fold(
                         onSuccess = { profile ->
                             if (profile != null) {
                                 _uiState.update { it.copy(isLoading = false, loginSuccessProfile = profile) }
                             } else {
-                                // User needs to select a role and complete registration
-                                _uiState.update { it.copy(isLoading = false, errorMessage = "Perfil no completado. Por favor registrate.") }
+                                // User authenticated with Google but lacks a Firestore UserProfile -> Trigger Onboarding Dialog
+                                _uiState.update { it.copy(isLoading = false, showGoogleOnboardingDialog = true) }
                             }
                         },
                         onFailure = { error ->
@@ -126,6 +195,37 @@ class LoginViewModel @Inject constructor(
                 _uiState.update { it.copy(isLoading = false, errorMessage = e.message ?: "Error al iniciar sesión con Google") }
             }
         }
+    }
+
+    fun completeGoogleOnboarding(selectedRole: UserRole) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            val firebaseUser = FirebaseAuth.getInstance().currentUser
+            if (firebaseUser != null) {
+                val profile = UserProfile(
+                    uid = firebaseUser.uid,
+                    email = firebaseUser.email ?: "",
+                    name = firebaseUser.displayName?.ifBlank { "Usuario Cooperativa" } ?: "Usuario Cooperativa",
+                    roles = listOf(selectedRole.name),
+                    activeRole = selectedRole.name,
+                    status = AccountStatus.ACTIVE
+                )
+                userRepository.saveUserProfile(profile).fold(
+                    onSuccess = {
+                        _uiState.update { it.copy(isLoading = false, showGoogleOnboardingDialog = false, loginSuccessProfile = profile) }
+                    },
+                    onFailure = { error ->
+                        _uiState.update { it.copy(isLoading = false, showGoogleOnboardingDialog = false, errorMessage = error.message ?: "Error al crear perfil.") }
+                    }
+                )
+            } else {
+                _uiState.update { it.copy(isLoading = false, showGoogleOnboardingDialog = false, errorMessage = "Error: Sesión de Google expirada.") }
+            }
+        }
+    }
+
+    fun dismissGoogleOnboardingDialog() {
+        _uiState.update { it.copy(showGoogleOnboardingDialog = false) }
     }
 
     fun onLoginHandled() {

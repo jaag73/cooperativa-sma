@@ -15,3 +15,6 @@ app/google-services.json
 keystore.properties
 .kotlin/
 app/build/
+# Build outputs
+app/release/
+*.apk
