@@ -1,0 +1,71 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      // Un usuario sólo puede crear o actualizar su propio perfil
+      allow create, update: if isOwner(userId);
+      allow delete: if false;
+    }
+
+    match /products/{productId} {
+      allow read: if isAuthenticated();
+      // Creación, edición y borrado limitados al dueño del negocio
+      allow create: if isAuthenticated() && request.resource.data.businessId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && resource.data.businessId == request.auth.uid;
+    }
+
+    match /live_orders/{orderId} {
+      // Lectura permitida a los participantes y repartidores autenticados para su radar
+      allow read: if isAuthenticated();
+
+      // Creación: Solo clientes autenticados (se auto-asignan), estado inicial PENDING_ACCEPTANCE
+      allow create: if isAuthenticated()
+                    && request.resource.data.clientId == request.auth.uid
+                    && request.resource.data.status == 'PENDING_ACCEPTANCE';
+
+      allow update: if isAuthenticated() && (
+
+        // 1. Cliente: Puede cancelar antes de que el negocio comience a preparar
+        (resource.data.clientId == request.auth.uid
+         && request.resource.data.status == 'CANCELLED'
+         && resource.data.status == 'PENDING_ACCEPTANCE')
+
+        ||
+
+        // 2. Repartidor: Toma la orden (Atomicidad) y avanza estados de tránsito. No puede alterar precio ni PIN.
+        (
+          ( // Tomar orden si está libre
+            resource.data.assignedCourierId == null
+            && request.resource.data.assignedCourierId == request.auth.uid
+            && request.resource.data.status == 'COURIER_ASSIGNED'
+          )
+          ||
+          ( // Avanzar estado siendo el repartidor dueño
+            resource.data.assignedCourierId == request.auth.uid
+            && request.resource.data.status in ['PICKED_UP_AT_BIKE', 'IN_TRANSIT_TO_CLIENT', 'DELIVERED']
+            // Protecciones inmutables para el repartidor:
+            && request.resource.data.cart == resource.data.cart
+            && request.resource.data.deliveryPin == resource.data.deliveryPin
+          )
+        )
+
+        ||
+
+        // 3. Negocio: Transiciona estados iniciales de su propio pedido (Se asume buena fe o validación en Cloud Functions para el match exacto del negocio)
+        (request.resource.data.status in ['PREPARING_AT_BUSINESS', 'READY_FOR_PICKUP', 'CANCELLED'])
+      );
+
+      allow delete: if false;
+    }
+  }
+}
