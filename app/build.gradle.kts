@@ -13,7 +13,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "mx.cooperativasma.app"
+            applicationId = "mx.cooperativasma.app"
         minSdk = 24
         targetSdk = 37
         versionCode = 1
@@ -67,4 +67,7 @@ dependencies {
     implementation(libs.firebase.messaging.ktx)
     implementation(libs.play.services.location)
     implementation(libs.kotlinx.coroutines.play.services)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.googleid)
 }

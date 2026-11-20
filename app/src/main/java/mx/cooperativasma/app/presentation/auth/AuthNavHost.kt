@@ -1,5 +1,6 @@
 package mx.cooperativasma.app.presentation.auth
 
+import mx.cooperativasma.app.domain.model.UserRole
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -16,8 +17,8 @@ fun AuthNavHost(
 
     when (val state = uiState) {
         is AuthUiState.Success -> {
-            LaunchedEffect(state.userProfile.role) {
-                onAuthSuccess(state.userProfile.role)
+            LaunchedEffect(state.userProfile.activeRole) {
+                onAuthSuccess(UserRole.valueOf(state.userProfile.activeRole))
             }
         }
         is AuthUiState.RequireProfileCompletion -> {
@@ -30,16 +31,9 @@ fun AuthNavHost(
             )
         }
         else -> {
-            LoginScreen(
-                uiState = state,
-                onPhoneEntered = { phone ->
-                    viewModel.onEvent(AuthUiEvent.OnPhoneEntered(phone))
-                },
-                onOtpEntered = { otp, verificationId ->
-                    viewModel.onEvent(AuthUiEvent.OnOtpCodeEntered(otp, verificationId))
-                },
-                onNavigateToLogin = onNavigateToLogin
-            )
+            LaunchedEffect(Unit) {
+                onNavigateToLogin()
+            }
         }
     }
 }

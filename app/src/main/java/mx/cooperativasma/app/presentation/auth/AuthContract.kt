@@ -13,8 +13,6 @@ sealed interface AuthUiState {
 }
 
 sealed interface AuthUiEvent {
-    data class OnPhoneEntered(val phoneNumber: String) : AuthUiEvent
-    data class OnOtpCodeEntered(val code: String, val verificationId: String) : AuthUiEvent
     data class OnCompleteProfileSubmit(
         val uid: String,
         val role: UserRole,

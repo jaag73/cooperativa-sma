@@ -33,7 +33,8 @@ data class UserProfile(
     val email: String = "",
     val name: String = "",
     val phone: String = "",
-    val role: UserRole = UserRole.CLIENT,
+    val roles: List<String> = listOf(UserRole.CLIENT.name),
+    val activeRole: String = UserRole.CLIENT.name,
     val status: AccountStatus = AccountStatus.ACTIVE,
     val communityId: String? = null,
 

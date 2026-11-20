@@ -34,6 +34,7 @@ fun CourierDashboardScreen(
     onLogout: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var showRoleMenu by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
@@ -42,6 +43,41 @@ fun CourierDashboardScreen(
                 title = { Text("Logística Cooperativa") },
                 actions = {
                     var expandedBases by remember { mutableStateOf(false) }
+                    
+                    Box {
+                        TextButton(onClick = { showRoleMenu = true }) {
+                            Text("Modo: Repartidor ▼")
+                        }
+                        DropdownMenu(
+                            expanded = showRoleMenu,
+                            onDismissRequest = { showRoleMenu = false }
+                        ) {
+                            uiState.currentUserProfile?.roles?.forEach { role ->
+                                val roleLabel = when(role) {
+                                    "CLIENT" -> "Cliente"
+                                    "BUSINESS" -> "Negocio"
+                                    "COURIER" -> "Repartidor"
+                                    else -> role
+                                }
+                                DropdownMenuItem(
+                                    text = { Text(roleLabel) },
+                                    onClick = {
+                                        showRoleMenu = false
+                                        if (role != "COURIER") {
+                                            viewModel.switchRole(role)
+                                            onLogout() 
+                                        }
+                                    }
+                                )
+                            }
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text("+ Activar otro rol", color = MaterialTheme.colorScheme.primary) },
+                                onClick = { showRoleMenu = false }
+                            )
+                        }
+                    }
+
                     Box {
                         TextButton(onClick = { expandedBases = true }) {
                             Text("📍 ${uiState.activeBase?.label ?: "Base"}")

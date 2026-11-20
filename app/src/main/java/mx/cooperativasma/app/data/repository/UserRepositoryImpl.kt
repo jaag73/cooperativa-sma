@@ -20,13 +20,53 @@ class UserRepositoryImpl @Inject constructor(
         val profile = this.toObject(UserProfile::class.java) ?: return null
         val roleString = this.getString("role") ?: this.getString("userRole") ?: ""
         val email = profile.email
-        val resolvedRole = when {
-            roleString.trim().uppercase() in listOf("BUSINESS", "NEGOCIO") || email.contains("negocio") -> UserRole.BUSINESS
-            roleString.trim().uppercase() in listOf("COURIER", "REPARTIDOR") || email.contains("repartidor") -> UserRole.COURIER
-            roleString.trim().uppercase() in listOf("CLIENT", "CLIENTE") || email.contains("cliente") -> UserRole.CLIENT
-            else -> profile.role
+        // Backwards compatibility
+        val fallbackRole = when {
+            roleString.trim().uppercase() in listOf("BUSINESS", "NEGOCIO") || email.contains("negocio") -> UserRole.BUSINESS.name
+            roleString.trim().uppercase() in listOf("COURIER", "REPARTIDOR") || email.contains("repartidor") -> UserRole.COURIER.name
+            else -> UserRole.CLIENT.name
         }
-        return profile.copy(role = resolvedRole)
+
+        val resolvedRoles = if (profile.roles.isEmpty()) listOf(fallbackRole) else profile.roles
+        val resolvedActiveRole = if (profile.activeRole.isEmpty()) resolvedRoles.first() else profile.activeRole
+
+        return profile.copy(roles = resolvedRoles, activeRole = resolvedActiveRole)
+    }
+
+    override suspend fun switchActiveRole(uid: String, newRole: String): Result<Unit> {
+        return try {
+            val docRef = firestore.collection("users").document(uid)
+            firestore.runTransaction { transaction ->
+                val profile = transaction.get(docRef).toObject(UserProfile::class.java) ?: throw Exception("Profile not found")
+                val currentRoles = profile.roles
+                if (!currentRoles.contains(newRole)) throw Exception("User doesn't have role $newRole")
+                transaction.update(docRef, "activeRole", newRole)
+            }.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun addRoleToProfile(uid: String, newRole: String, extraData: Map<String, Any>?): Result<Unit> {
+        return try {
+            val docRef = firestore.collection("users").document(uid)
+            firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(docRef)
+                val currentRoles = snapshot.get("roles") as? List<String> ?: listOf(snapshot.getString("role") ?: "CLIENT")
+                
+                val updatedRoles = (currentRoles + newRole).distinct()
+                val updates = mutableMapOf<String, Any>(
+                    "roles" to updatedRoles,
+                    "activeRole" to newRole
+                )
+                extraData?.let { updates.putAll(it) }
+                transaction.update(docRef, updates)
+            }.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     override suspend fun getUserProfile(uid: String): Result<UserProfile?> {

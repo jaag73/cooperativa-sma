@@ -8,4 +8,6 @@ interface UserRepository {
     suspend fun saveUserProfile(userProfile: UserProfile): Result<Unit>
     fun getUserProfileFlow(uid: String): Flow<UserProfile?>
     fun getAllUsersFlow(): Flow<List<UserProfile>>
+    suspend fun switchActiveRole(uid: String, newRole: String): Result<Unit>
+    suspend fun addRoleToProfile(uid: String, newRole: String, extraData: Map<String, Any>? = null): Result<Unit>
 }

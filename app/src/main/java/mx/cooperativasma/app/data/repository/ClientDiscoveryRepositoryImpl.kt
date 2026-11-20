@@ -19,7 +19,7 @@ class ClientDiscoveryRepositoryImpl @Inject constructor(
 
     override fun getBusinessesFlow(): Flow<List<UserProfile>> {
         return userRepository.getAllUsersFlow().map { users ->
-            users.filter { it.role == UserRole.BUSINESS }
+            users.filter { it.roles.contains(UserRole.BUSINESS.name) }
         }
     }
 

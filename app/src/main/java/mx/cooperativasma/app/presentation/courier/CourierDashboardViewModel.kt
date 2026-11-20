@@ -2,6 +2,7 @@ package mx.cooperativasma.app.presentation.courier
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import mx.cooperativasma.app.domain.model.UserProfile
 import mx.cooperativasma.app.domain.model.CourierOrderOpportunity
 import mx.cooperativasma.app.domain.model.CourierRestBase
 import mx.cooperativasma.app.domain.model.HotspotDemandInfo
@@ -19,13 +20,14 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class CourierDashboardUiState(
+    val currentUserProfile: UserProfile? = null,
     val currentTab: CourierTab = CourierTab.LIVE_RADAR,
     val restBases: List<CourierRestBase> = emptyList(),
     val activeBase: CourierRestBase? = null,
     val availableOrders: List<CourierOrderOpportunity> = emptyList(),
     val scheduledOrders: List<CourierOrderOpportunity> = emptyList(),
     val hotspots: List<HotspotDemandInfo> = emptyList(),
-    val todayNetEarnings: Double = 230.0 // Simulando progreso del día
+    val todayNetEarnings: Double = 230.0
 )
 
 enum class CourierTab {
@@ -42,6 +44,8 @@ class CourierDashboardViewModel @Inject constructor(
     private val _currentTab = MutableStateFlow(CourierTab.LIVE_RADAR)
     private val _userBases = MutableStateFlow<List<CourierRestBase>>(emptyList())
     
+    private val _currentUserProfile = MutableStateFlow<UserProfile?>(null)
+
     init {
         loadUserBases()
     }
@@ -51,6 +55,7 @@ class CourierDashboardViewModel @Inject constructor(
             val uid = authRepository.getCurrentUserId() ?: return@launch
             val profileResult = userRepository.getUserProfile(uid)
             profileResult.onSuccess { profile ->
+                _currentUserProfile.value = profile
                 val bases = mutableListOf<CourierRestBase>()
                 profile?.primaryRestBase?.let { bases.add(it.copy(isCurrentActiveBase = true)) }
                 profile?.secondaryRestBase?.let { bases.add(it.copy(isCurrentActiveBase = false)) }
@@ -66,19 +71,29 @@ class CourierDashboardViewModel @Inject constructor(
     }
 
     val uiState: StateFlow<CourierDashboardUiState> = combine(
+        _currentUserProfile,
         _currentTab,
         _userBases,
         logisticsRepository.getAvailableOrdersFlow(),
         logisticsRepository.getScheduledOrdersFlow(),
         logisticsRepository.getHotspotDemandFlow()
-    ) { tab, bases, available, scheduled, hotspots ->
+    ) { args: Array<Any?> ->
+        val profile = args[0] as UserProfile?
+        val tab = args[1] as CourierTab
+        @Suppress("UNCHECKED_CAST") val bases = args[2] as List<CourierRestBase>
+        @Suppress("UNCHECKED_CAST") val available = args[3] as List<CourierOrderOpportunity>
+        @Suppress("UNCHECKED_CAST") val scheduled = args[4] as List<CourierOrderOpportunity>
+        @Suppress("UNCHECKED_CAST") val hotspots = args[5] as List<HotspotDemandInfo>
+        
         CourierDashboardUiState(
+            currentUserProfile = profile,
             currentTab = tab,
             restBases = bases,
             activeBase = bases.find { it.isCurrentActiveBase } ?: bases.firstOrNull(),
             availableOrders = available,
             scheduledOrders = scheduled,
-            hotspots = hotspots
+            hotspots = hotspots,
+            todayNetEarnings = profile?.dailyEarnings ?: 0.0
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CourierDashboardUiState())
 
@@ -89,5 +104,12 @@ class CourierDashboardViewModel @Inject constructor(
     fun switchActiveBase(baseId: String) {
         val updated = _userBases.value.map { it.copy(isCurrentActiveBase = (it.id == baseId)) }
         _userBases.value = updated
+    }
+
+    fun switchRole(newRole: String) {
+        val uid = authRepository.getCurrentUserId() ?: return
+        viewModelScope.launch {
+            userRepository.switchActiveRole(uid, newRole)
+        }
     }
 }

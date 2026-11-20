@@ -14,13 +14,30 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+import mx.cooperativasma.app.domain.repository.AuthRepository
+import mx.cooperativasma.app.domain.repository.UserRepository
 
 @HiltViewModel
 class ClientHomeViewModel @Inject constructor(
     private val clientDiscoveryRepository: ClientDiscoveryRepository,
-    cartRepository: CartRepository
+    cartRepository: CartRepository,
+    private val authRepository: AuthRepository,
+    private val userRepository: UserRepository
 ) : ViewModel() {
+
+    val currentUserProfile = authRepository.getCurrentUserId()?.let { uid ->
+        userRepository.getUserProfileFlow(uid)
+    } ?: kotlinx.coroutines.flow.flowOf(null)
+
+    fun switchRole(newRole: String) {
+        val uid = authRepository.getCurrentUserId() ?: return
+        viewModelScope.launch {
+            userRepository.switchActiveRole(uid, newRole)
+        }
+    }
 
     private val _currentFilter = MutableStateFlow("Todos")
     val currentFilter: StateFlow<String> = _currentFilter.asStateFlow()

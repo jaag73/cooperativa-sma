@@ -7,6 +7,7 @@ import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
@@ -42,7 +43,9 @@ class AuthRepositoryImpl @Inject constructor(
                             roleString.trim().uppercase() in listOf("COURIER", "REPARTIDOR") || email.contains("repartidor") -> mx.cooperativasma.app.domain.model.UserRole.COURIER
                             else -> mx.cooperativasma.app.domain.model.UserRole.CLIENT
                         }
-                        profile = profile.copy(role = resolvedRole)
+                        val dbRoles = doc.get("roles") as? List<String> ?: listOf(resolvedRole.name)
+                        val dbActiveRole = doc.getString("activeRole") ?: resolvedRole.name
+                        profile = profile.copy(roles = dbRoles, activeRole = dbActiveRole)
                         Result.success(profile)
                     } else {
                         Result.failure(Exception("Usuario autenticado en Auth, pero sin perfil válido en Firestore para el UID: $uid"))
@@ -62,16 +65,59 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun signInWithPhone(phoneNumber: String): Result<String> {
-        return Result.success("dummy_verification_id")
+    override suspend fun registerWithEmail(email: String, password: String, name: String, role: mx.cooperativasma.app.domain.model.UserRole): Result<UserProfile> {
+        return try {
+            val authResult = firebaseAuth.createUserWithEmailAndPassword(email, password).await()
+            val uid = authResult.user?.uid ?: throw Exception("UID not found")
+            val profile = UserProfile(
+                uid = uid,
+                email = email,
+                name = name,
+                roles = listOf(role.name),
+                activeRole = role.name,
+                status = mx.cooperativasma.app.domain.model.AccountStatus.ACTIVE
+            )
+            userRepository.saveUserProfile(profile)
+            Result.success(profile)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
-    override suspend fun verifyOtp(verificationId: String, code: String): Result<String> {
-        return Result.success("dummy_uid")
+    override suspend fun sendPasswordResetEmail(email: String): Result<Unit> {
+        return try {
+            firebaseAuth.sendPasswordResetEmail(email).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
-    override suspend fun signInWithGoogle(idToken: String): Result<String> {
-        return Result.success("dummy_uid")
+    override suspend fun signInWithGoogle(idToken: String): Result<UserProfile?> {
+        return try {
+            val credential = GoogleAuthProvider.getCredential(idToken, null)
+            val authResult = firebaseAuth.signInWithCredential(credential).await()
+            val uid = authResult.user?.uid ?: throw Exception("UID not found")
+            
+            val profileResult = userRepository.getUserProfile(uid)
+            if (profileResult.isSuccess && profileResult.getOrNull() != null) {
+                Result.success(profileResult.getOrNull())
+            } else {
+                Result.success(null) // Return null so UI knows to ask for role
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun switchActiveRole(newRole: String): Result<Unit> {
+        val uid = getCurrentUserId() ?: return Result.failure(Exception("Not authenticated"))
+        return userRepository.switchActiveRole(uid, newRole)
+    }
+
+    override suspend fun addRoleToProfile(newRole: String, extraData: Map<String, Any>?): Result<Unit> {
+        val uid = getCurrentUserId() ?: return Result.failure(Exception("Not authenticated"))
+        return userRepository.addRoleToProfile(uid, newRole, extraData)
     }
 
     override fun getCurrentUserId(): String? {

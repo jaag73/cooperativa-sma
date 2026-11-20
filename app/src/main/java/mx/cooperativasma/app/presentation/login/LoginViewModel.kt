@@ -12,6 +12,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.GetCredentialResponse
+import androidx.credentials.exceptions.GetCredentialException
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import android.content.Context
+import mx.cooperativasma.app.R
 
 data class LoginUiState(
     val emailOrPhone: String = "",
@@ -75,6 +83,48 @@ class LoginViewModel @Inject constructor(
                     _uiState.update { it.copy(isLoading = false, errorMessage = error.message) }
                 }
             )
+        }
+    }
+
+    fun signInWithGoogle(context: Context) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            try {
+                val credentialManager = CredentialManager.create(context)
+                val googleIdOption = GetGoogleIdOption.Builder()
+                    .setFilterByAuthorizedAccounts(false)
+                    .setServerClientId(context.getString(R.string.default_web_client_id))
+                    .setAutoSelectEnabled(true)
+                    .build()
+                    
+                val request = GetCredentialRequest.Builder()
+                    .addCredentialOption(googleIdOption)
+                    .build()
+                    
+                val result = credentialManager.getCredential(context, request)
+                val credential = result.credential
+                
+                if (credential is com.google.android.libraries.identity.googleid.GoogleIdTokenCredential) {
+                    val idToken = credential.idToken
+                    authRepository.signInWithGoogle(idToken).fold(
+                        onSuccess = { profile ->
+                            if (profile != null) {
+                                _uiState.update { it.copy(isLoading = false, loginSuccessProfile = profile) }
+                            } else {
+                                // User needs to select a role and complete registration
+                                _uiState.update { it.copy(isLoading = false, errorMessage = "Perfil no completado. Por favor registrate.") }
+                            }
+                        },
+                        onFailure = { error ->
+                            _uiState.update { it.copy(isLoading = false, errorMessage = error.message) }
+                        }
+                    )
+                } else {
+                    _uiState.update { it.copy(isLoading = false, errorMessage = "Error: Credencial inválida") }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false, errorMessage = e.message ?: "Error al iniciar sesión con Google") }
+            }
         }
     }
 

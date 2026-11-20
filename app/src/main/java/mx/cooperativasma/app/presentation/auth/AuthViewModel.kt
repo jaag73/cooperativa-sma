@@ -30,37 +30,8 @@ class AuthViewModel @Inject constructor(
 
     fun onEvent(event: AuthUiEvent) {
         when (event) {
-            is AuthUiEvent.OnPhoneEntered -> handlePhoneEntered(event.phoneNumber)
-            is AuthUiEvent.OnOtpCodeEntered -> handleOtpEntered(event.code, event.verificationId)
             is AuthUiEvent.OnCompleteProfileSubmit -> handleProfileComplete(event)
-        }
-    }
-
-    private fun handlePhoneEntered(phoneNumber: String) {
-        viewModelScope.launch {
-            _uiState.update { AuthUiState.Loading }
-            authRepository.signInWithPhone(phoneNumber).fold(
-                onSuccess = { verificationId ->
-                    _uiState.update { AuthUiState.Idle }
-                },
-                onFailure = { error ->
-                    _uiState.update { AuthUiState.Error(error.message ?: "Error al enviar SMS") }
-                }
-            )
-        }
-    }
-
-    private fun handleOtpEntered(code: String, verificationId: String) {
-        viewModelScope.launch {
-            _uiState.update { AuthUiState.Loading }
-            authRepository.verifyOtp(verificationId, code).fold(
-                onSuccess = { uid ->
-                    checkUserProfile(uid)
-                },
-                onFailure = { error ->
-                    _uiState.update { AuthUiState.Error(error.message ?: "Código OTP inválido") }
-                }
-            )
+            else -> {}
         }
     }
 
@@ -103,7 +74,8 @@ class AuthViewModel @Inject constructor(
             val profile = UserProfile(
                 uid = if (event.uid.isBlank()) "dummy_uid" else event.uid,
                 name = event.name,
-                role = event.role,
+                roles = listOf(event.role.name),
+                activeRole = event.role.name,
                 communityId = event.communityId,
                 status = status,
                 trialInfo = trialInfo,

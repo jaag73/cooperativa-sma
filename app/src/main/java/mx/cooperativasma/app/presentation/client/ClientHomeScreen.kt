@@ -13,9 +13,7 @@ import androidx.compose.material.icons.rounded.ShoppingCart
 import androidx.compose.material.icons.rounded.Storefront
 import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -37,6 +35,9 @@ fun ClientHomeScreen(
     val currentFilter by viewModel.currentFilter.collectAsState()
     val availableFilters by viewModel.availableFilters.collectAsState()
     val cart by viewModel.cartFlow.collectAsState()
+    val userProfile by viewModel.currentUserProfile.collectAsState(initial = null)
+
+    var showRoleMenu by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -52,6 +53,39 @@ fun ClientHomeScreen(
                     }
                 },
                 actions = {
+                    Box {
+                        TextButton(onClick = { showRoleMenu = true }) {
+                            Text("Modo: Cliente ▼")
+                        }
+                        DropdownMenu(
+                            expanded = showRoleMenu,
+                            onDismissRequest = { showRoleMenu = false }
+                        ) {
+                            userProfile?.roles?.forEach { role ->
+                                val roleLabel = when(role) {
+                                    "CLIENT" -> "Cliente"
+                                    "BUSINESS" -> "Negocio"
+                                    "COURIER" -> "Repartidor"
+                                    else -> role
+                                }
+                                DropdownMenuItem(
+                                    text = { Text(roleLabel) },
+                                    onClick = {
+                                        showRoleMenu = false
+                                        if (role != "CLIENT") {
+                                            viewModel.switchRole(role)
+                                            onLogout() 
+                                        }
+                                    }
+                                )
+                            }
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text("+ Activar otro rol", color = MaterialTheme.colorScheme.primary) },
+                                onClick = { showRoleMenu = false }
+                            )
+                        }
+                    }
                     IconButton(onClick = onLogout) {
                         Icon(Icons.AutoMirrored.Rounded.Logout, contentDescription = "Cerrar sesión")
                     }

@@ -42,6 +42,7 @@ class LocalFirebaseSeeder @Inject constructor(
                 }
                 
                 seedUser("repartidor@sma.mx", "123456", createCourierProfile())
+                seedUser("admin@sma.mx", "123456", createAdminProfile())
                 Log.d("LocalFirebaseSeeder", "Seeding complete.")
             }
         } catch (e: Exception) {
@@ -116,7 +117,8 @@ class LocalFirebaseSeeder @Inject constructor(
             uid = uid,
             email = email,
             name = "Cliente Demo",
-            role = UserRole.CLIENT,
+            roles = listOf(UserRole.CLIENT.name),
+            activeRole = UserRole.CLIENT.name,
             status = AccountStatus.ACTIVE
         )
     }
@@ -126,7 +128,8 @@ class LocalFirebaseSeeder @Inject constructor(
             uid = uid,
             email = email,
             name = "Tortas El Sazón SMA",
-            role = UserRole.BUSINESS,
+            roles = listOf(UserRole.BUSINESS.name),
+            activeRole = UserRole.BUSINESS.name,
             status = AccountStatus.ACTIVE,
             taxonomy = BusinessTaxonomy(
                 sector = "Restaurante / Comida",
@@ -152,7 +155,8 @@ class LocalFirebaseSeeder @Inject constructor(
             uid = uid,
             email = email,
             name = "Repartidor Demo",
-            role = UserRole.COURIER,
+            roles = listOf(UserRole.COURIER.name),
+            activeRole = UserRole.COURIER.name,
             status = AccountStatus.ACTIVE,
             primaryRestBase = CourierRestBase(
                 id = "base_1",
@@ -167,6 +171,35 @@ class LocalFirebaseSeeder @Inject constructor(
                 neighborhood = "San Antonio",
                 postalCode = "37710",
                 isCurrentActiveBase = false
+            )
+        )
+    }
+
+    private fun createAdminProfile(): (String, String) -> UserProfile = { uid, email ->
+        UserProfile(
+            uid = uid,
+            email = email,
+            name = "Super Admin SMA",
+            roles = listOf(UserRole.CLIENT.name, UserRole.BUSINESS.name, UserRole.COURIER.name),
+            activeRole = UserRole.CLIENT.name,
+            status = AccountStatus.ACTIVE,
+            taxonomy = BusinessTaxonomy(
+                sector = "Restaurante / Comida",
+                category = "Tortas"
+            ),
+            structuredAddress = StructuredAddress(
+                city = "San Miguel de Allende",
+                postalCode = "37700",
+                neighborhoodOrCommunity = "Centro",
+                street = "Mesones",
+                exteriorNumber = "45"
+            ),
+            primaryRestBase = CourierRestBase(
+                id = "base_1",
+                label = "Mi Casa",
+                neighborhood = "Santas Marías",
+                postalCode = "37712",
+                isCurrentActiveBase = true
             )
         )
     }

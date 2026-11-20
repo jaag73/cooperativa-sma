@@ -37,6 +37,7 @@ fun BusinessDashboardScreen(
     onLogout: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var showRoleMenu by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -75,6 +76,41 @@ fun BusinessDashboardScreen(
                             onCheckedChange = { isStoreOpen = it },
                             modifier = Modifier.scale(0.8f)
                         )
+                        
+                        Box {
+                            TextButton(onClick = { showRoleMenu = true }) {
+                                Text("Modo: Negocio ▼")
+                            }
+                            DropdownMenu(
+                                expanded = showRoleMenu,
+                                onDismissRequest = { showRoleMenu = false }
+                            ) {
+                                (uiState as? BusinessUiState.Success)?.userProfile?.roles?.forEach { role ->
+                                    val roleLabel = when(role) {
+                                        "CLIENT" -> "Cliente"
+                                        "BUSINESS" -> "Negocio"
+                                        "COURIER" -> "Repartidor"
+                                        else -> role
+                                    }
+                                    DropdownMenuItem(
+                                        text = { Text(roleLabel) },
+                                        onClick = {
+                                            showRoleMenu = false
+                                            if (role != "BUSINESS") {
+                                                // Handle role switch (in a real app call viewModel to update and navigate)
+                                                onLogout() 
+                                            }
+                                        }
+                                    )
+                                }
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text("+ Activar otro rol", color = MaterialTheme.colorScheme.primary) },
+                                    onClick = { showRoleMenu = false }
+                                )
+                            }
+                        }
+
                         IconButton(onClick = onLogout) {
                             Icon(Icons.AutoMirrored.Rounded.Logout, contentDescription = "Cerrar sesión")
                         }

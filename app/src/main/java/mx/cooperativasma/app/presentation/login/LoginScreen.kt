@@ -11,7 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.rounded.Diversity3
+import androidx.compose.material.icons.rounded.Handshake
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Storefront
 import androidx.compose.material.icons.rounded.TwoWheeler
@@ -25,6 +25,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -39,11 +40,12 @@ fun LoginScreen(
     onNavigateToRegister: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
 
     LaunchedEffect(uiState.loginSuccessProfile) {
         uiState.loginSuccessProfile?.let { profile ->
-            Log.d("SMA_AUTH", "Usuario logueado: ${profile.email} con rol: ${profile.role}")
-            onNavigateToDashboard(profile.role)
+            Log.d("SMA_AUTH", "Usuario logueado: ${profile.email} con rol activo: ${profile.activeRole}")
+            onNavigateToDashboard(UserRole.valueOf(profile.activeRole))
             viewModel.onLoginHandled()
         }
     }
@@ -66,7 +68,7 @@ fun LoginScreen(
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
-                    imageVector = Icons.Rounded.Diversity3,
+                    imageVector = Icons.Rounded.Handshake,
                     contentDescription = "Logo Cooperativa",
                     modifier = Modifier.size(48.dp),
                     tint = MaterialTheme.colorScheme.onPrimaryContainer
@@ -154,6 +156,13 @@ fun LoginScreen(
                         text = "Ingresar",
                         onClick = { viewModel.login() }
                     )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedButton(
+                        onClick = { viewModel.signInWithGoogle(context) },
+                        modifier = Modifier.fillMaxWidth().height(56.dp)
+                    ) {
+                        Text("Continuar con Google")
+                    }
                 }
 
                 if (uiState.errorMessage != null) {
@@ -183,33 +192,34 @@ fun LoginScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        Text("Accesos Rápidos (DEBUG)", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onBackground)
-        Spacer(modifier = Modifier.height(12.dp))
-        
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            RoleDebugCard(
-                icon = Icons.Rounded.Person,
-                label = "Cliente",
-                onClick = { viewModel.fillDemoCredentials(UserRole.CLIENT) },
-                modifier = Modifier.weight(1f)
-            )
-            RoleDebugCard(
-                icon = Icons.Rounded.Storefront,
-                label = "Negocio",
-                onClick = { viewModel.fillDemoCredentials(UserRole.BUSINESS) },
-                modifier = Modifier.weight(1f)
-            )
-            RoleDebugCard(
-                icon = Icons.Rounded.TwoWheeler,
-                label = "Repartidor",
-                onClick = { viewModel.fillDemoCredentials(UserRole.COURIER) },
-                modifier = Modifier.weight(1f)
-            )
+        if (mx.cooperativasma.app.BuildConfig.DEBUG) {
+            Spacer(modifier = Modifier.height(32.dp))
+            Text("Accesos Rápidos (DEBUG)", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onBackground)
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                RoleDebugCard(
+                    icon = Icons.Rounded.Person,
+                    label = "Cliente",
+                    onClick = { viewModel.fillDemoCredentials(UserRole.CLIENT) },
+                    modifier = Modifier.weight(1f)
+                )
+                RoleDebugCard(
+                    icon = Icons.Rounded.Storefront,
+                    label = "Negocio",
+                    onClick = { viewModel.fillDemoCredentials(UserRole.BUSINESS) },
+                    modifier = Modifier.weight(1f)
+                )
+                RoleDebugCard(
+                    icon = Icons.Rounded.TwoWheeler,
+                    label = "Repartidor",
+                    onClick = { viewModel.fillDemoCredentials(UserRole.COURIER) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(32.dp))
